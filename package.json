@@ -1,7 +1,5 @@
 {
-  "name": "contracts-starter",
-  "author": "Yos Riady",
-  "license": "MIT",
+  "name": "xhain-ownership",
   "version": "0.0.1",
   "devDependencies": {
     "@ethersproject/abstract-signer": "^5.0.6",
@@ -51,8 +49,8 @@
     "prettier:list-different": "prettier --config .prettierrc --list-different \"**/*.{js,json,md,sol,ts}\"",
     "test": "hardhat test",
     "typechain": "hardhat typechain",
-    "deploy:kovan": "hardhat deploy --network kovan --gasprice 1000000000",
-    "verify:kovan": "hardhat etherscan-verify --network kovan",
+    "deploy": "hardhat deploy --network arbitrum-rinkeby --gasprice 1000000000",
+    "verify": "hardhat etherscan-verify --network arbitrum-rinkeby",
     "hat": "hardhat",
     "prepare": "husky install"
   },

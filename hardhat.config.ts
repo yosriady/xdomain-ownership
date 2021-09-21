@@ -23,13 +23,6 @@ const accounts = {
   mnemonic,
 };
 
-let infuraApiKey: string;
-if (!process.env.INFURA_API_KEY) {
-  throw new Error("Please set your INFURA_API_KEY in a .env file");
-} else {
-  infuraApiKey = process.env.INFURA_API_KEY;
-}
-
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   networks: {
@@ -37,10 +30,15 @@ const config: HardhatUserConfig = {
       accounts,
       chainId: 31337,
     },
-    kovan: {
-      url: `https://kovan.infura.io/v3/${infuraApiKey}`,
+    rinkeby: {
+      url: process.env.RINKEBY_RPC_URL,
       accounts,
-      chainId: 42,
+      chainId: 4,
+    },
+    "arbitrum-testnet": {
+      url: `https://rinkeby.arbitrum.io/rpc`,
+      accounts,
+      chainId: 421611,
     },
   },
   namedAccounts: {
