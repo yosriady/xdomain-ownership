@@ -23,4 +23,4 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   console.log(`myContract greeting: ${myContractGreeting}`);
 };
 export default func;
-func.tags = ["InspectOwnership"];
+func.tags = ["Inspect"];
