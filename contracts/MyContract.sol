@@ -2,8 +2,12 @@
 
 pragma solidity 0.8.6;
 
-contract MyContract {
-  function greet() external pure returns (string memory) {
-    return "Hello World!";
+import "./ConfirmedOwner.sol";
+
+contract MyContract is ConfirmedOwner(msg.sender) {
+  string public greeting;
+
+  function setGreeting(string calldata _greeting) external {
+    greeting = _greeting;
   }
 }

@@ -49,8 +49,8 @@
     "prettier:list-different": "prettier --config .prettierrc --list-different \"**/*.{js,json,md,sol,ts}\"",
     "test": "hardhat test",
     "typechain": "hardhat typechain",
-    "deploy": "hardhat deploy --network arbitrum-rinkeby --gasprice 1000000000",
-    "verify": "hardhat etherscan-verify --network arbitrum-rinkeby",
+    "deploy": "hardhat deploy --network arbitrum-testnet",
+    "verify": "hardhat etherscan-verify --network arbitrum-testnet",
     "hat": "hardhat",
     "prepare": "husky install"
   },

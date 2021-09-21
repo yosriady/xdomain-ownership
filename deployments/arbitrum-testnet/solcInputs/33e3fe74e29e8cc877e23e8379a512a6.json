@@ -1,0 +1,57 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "contracts/ArbitrumCrossDomainForwarder.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\nimport \"./interfaces/TypeAndVersionInterface.sol\";\nimport \"./vendor/arb-bridge-eth/v0.8.0-custom/contracts/libraries/AddressAliasHelper.sol\";\nimport \"./CrossDomainForwarder.sol\";\n\n/**\n * @title ArbitrumCrossDomainForwarder - L1 xDomain account representation\n * @notice L2 Contract which receives messages from a specific L1 address and transparently forwards them to the destination.\n * @dev Any other L2 contract which uses this contract's address as a privileged position,\n *   can be considered to be owned by the `l1Owner`\n */\ncontract ArbitrumCrossDomainForwarder is TypeAndVersionInterface, CrossDomainForwarder {\n  /**\n   * @notice creates a new Arbitrum xDomain Forwarder contract\n   * @param l1OwnerAddr the L1 owner address that will be allowed to call the forward fn\n   */\n  constructor(address l1OwnerAddr) CrossDomainForwarder(l1OwnerAddr) {\n    // noop\n  }\n\n  /**\n   * @notice versions:\n   *\n   * - ArbitrumCrossDomainForwarder 0.1.0: initial release\n   *\n   * @inheritdoc TypeAndVersionInterface\n   */\n  function typeAndVersion() external pure virtual override returns (string memory) {\n    return \"ArbitrumCrossDomainForwarder 0.1.0\";\n  }\n\n  /**\n   * @notice The L2 xDomain `msg.sender`, generated from L1 sender address\n   * @inheritdoc CrossDomainForwarder\n   */\n  function crossDomainMessenger() public view virtual override returns (address) {\n    return AddressAliasHelper.applyL1ToL2Alias(l1Owner());\n  }\n\n  /**\n   * @dev forwarded only if L2 Messenger calls with `xDomainMessageSender` beeing the L1 owner address\n   * @inheritdoc ForwarderInterface\n   */\n  function forward(address target, bytes memory data) external override {\n    // 1. The call MUST come from the L2 Messenger (deterministically generated from the L1 xDomain sender address)\n    require(msg.sender == crossDomainMessenger(), \"Sender is not the L2 messenger\");\n    // 2. Make the external call\n    (bool success, bytes memory res) = target.call(data);\n    require(success, string(abi.encode(\"xDomain call failed:\", res)));\n  }\n}\n"
+    },
+    "contracts/interfaces/TypeAndVersionInterface.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\nabstract contract TypeAndVersionInterface {\n  function typeAndVersion() external pure virtual returns (string memory);\n}\n"
+    },
+    "contracts/vendor/arb-bridge-eth/v0.8.0-custom/contracts/libraries/AddressAliasHelper.sol": {
+      "content": "// SPDX-License-Identifier: Apache-2.0\n\n/*\n * Copyright 2019-2021, Offchain Labs, Inc.\n *\n * Licensed under the Apache License, Version 2.0 (the \"License\");\n * you may not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing, software\n * distributed under the License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n * See the License for the specific language governing permissions and\n * limitations under the License.\n */\n\n// NOTICE: pragma change from original (^0.6.11)\npragma solidity ^0.8.0;\n\nlibrary AddressAliasHelper {\n  uint160 constant offset = uint160(0x1111000000000000000000000000000000001111);\n\n  /// @notice Utility function that converts the msg.sender viewed in the L2 to the\n  /// address in the L1 that submitted a tx to the inbox\n  /// @param l1Address L2 address as viewed in msg.sender\n  /// @return l2Address the address in the L1 that triggered the tx to L2\n  function applyL1ToL2Alias(address l1Address) internal pure returns (address l2Address) {\n    unchecked {\n      l2Address = address(uint160(l1Address) + offset);\n    }\n  }\n\n  /// @notice Utility function that converts the msg.sender viewed in the L2 to the\n  /// address in the L1 that submitted a tx to the inbox\n  /// @param l2Address L2 address as viewed in msg.sender\n  /// @return l1Address the address in the L1 that triggered the tx to L2\n  function undoL1ToL2Alias(address l2Address) internal pure returns (address l1Address) {\n    unchecked {\n      l1Address = address(uint160(l2Address) - offset);\n    }\n  }\n}\n"
+    },
+    "contracts/CrossDomainForwarder.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\nimport \"./ConfirmedOwner.sol\";\nimport \"./interfaces/ForwarderInterface.sol\";\n\n/**\n * @title CrossDomainForwarder - L1 xDomain account representation\n * @notice L2 Contract which receives messages from a specific L1 address and transparently forwards them to the destination.\n * @dev Any other L2 contract which uses this contract's address as a privileged position,\n *   can be considered to be owned by the `l1Owner`\n */\nabstract contract CrossDomainForwarder is ForwarderInterface, ConfirmedOwner {\n  address private s_l1Owner;\n\n  event L1OwnershipTransferred(address indexed from, address indexed to);\n\n  /**\n   * @notice creates a new xDomain Forwarder contract\n   * @dev Forwarding can be disabled by setting the L1 owner as `address(0)`.\n   * @param l1OwnerAddr the L1 owner address that will be allowed to call the forward fn\n   */\n  constructor(address l1OwnerAddr) ConfirmedOwner(msg.sender) {\n    _setL1Owner(l1OwnerAddr);\n  }\n\n  /// @return xDomain messenger address (L2 `msg.sender`)\n  function crossDomainMessenger() public view virtual returns (address);\n\n  /// @return L1 owner address\n  function l1Owner() public view virtual returns (address) {\n    return s_l1Owner;\n  }\n\n  /**\n   * @notice transfer ownership of this account to a new L1 owner\n   * @dev Forwarding can be disabled by setting the L1 owner as `address(0)`. Accessible only by owner.\n   * @param to new L1 owner that will be allowed to call the forward fn\n   */\n  function transferL1Ownership(address to) external virtual onlyOwner {\n    _setL1Owner(to);\n  }\n\n  /// @notice internal method that stores the L1 owner\n  function _setL1Owner(address to) internal {\n    address from = s_l1Owner;\n    if (from != to) {\n      s_l1Owner = to;\n      emit L1OwnershipTransferred(from, to);\n    }\n  }\n}\n"
+    },
+    "contracts/ConfirmedOwner.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\nimport \"./ConfirmedOwnerWithProposal.sol\";\n\n/**\n * @title The ConfirmedOwner contract\n * @notice A contract with helpers for basic contract ownership.\n */\ncontract ConfirmedOwner is ConfirmedOwnerWithProposal {\n  constructor(address newOwner) ConfirmedOwnerWithProposal(newOwner, address(0)) {}\n}\n"
+    },
+    "contracts/interfaces/ForwarderInterface.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\n/// @title ForwarderInterface - forwards a call to a target, under some conditions\ninterface ForwarderInterface {\n  /**\n   * @notice forward calls the `target` with `data`\n   * @param target contract address to be called\n   * @param data to send to target contract\n   */\n  function forward(address target, bytes memory data) external;\n}\n"
+    },
+    "contracts/ConfirmedOwnerWithProposal.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\nimport \"./interfaces/OwnableInterface.sol\";\n\n/**\n * @title The ConfirmedOwner contract\n * @notice A contract with helpers for basic contract ownership.\n */\ncontract ConfirmedOwnerWithProposal is OwnableInterface {\n  address private s_owner;\n  address private s_pendingOwner;\n\n  event OwnershipTransferRequested(address indexed from, address indexed to);\n  event OwnershipTransferred(address indexed from, address indexed to);\n\n  constructor(address newOwner, address pendingOwner) {\n    require(newOwner != address(0), \"Cannot set owner to zero\");\n\n    s_owner = newOwner;\n    if (pendingOwner != address(0)) {\n      _transferOwnership(pendingOwner);\n    }\n  }\n\n  /**\n   * @notice Allows an owner to begin transferring ownership to a new address,\n   * pending.\n   */\n  function transferOwnership(address to) public override onlyOwner {\n    _transferOwnership(to);\n  }\n\n  /**\n   * @notice Allows an ownership transfer to be completed by the recipient.\n   */\n  function acceptOwnership() external override {\n    require(msg.sender == s_pendingOwner, \"Must be proposed owner\");\n\n    address oldOwner = s_owner;\n    s_owner = msg.sender;\n    s_pendingOwner = address(0);\n\n    emit OwnershipTransferred(oldOwner, msg.sender);\n  }\n\n  /**\n   * @notice Get the current owner\n   */\n  function owner() public view override returns (address) {\n    return s_owner;\n  }\n\n  /**\n   * @notice validate, transfer ownership, and emit relevant events\n   */\n  function _transferOwnership(address to) private {\n    require(to != msg.sender, \"Cannot transfer to self\");\n\n    s_pendingOwner = to;\n\n    emit OwnershipTransferRequested(s_owner, to);\n  }\n\n  /**\n   * @notice validate access\n   */\n  function _validateOwnership() internal view {\n    require(msg.sender == s_owner, \"Only callable by owner\");\n  }\n\n  /**\n   * @notice Reverts if called by anyone other than the contract owner.\n   */\n  modifier onlyOwner() {\n    _validateOwnership();\n    _;\n  }\n}\n"
+    },
+    "contracts/interfaces/OwnableInterface.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ninterface OwnableInterface {\n  function owner() external returns (address);\n\n  function transferOwnership(address recipient) external;\n\n  function acceptOwnership() external;\n}\n"
+    },
+    "contracts/MyContract.sol": {
+      "content": "// SPDX-License-Identifier: MIT\n\npragma solidity 0.8.6;\n\nimport \"./ConfirmedOwner.sol\";\n\ncontract MyContract is ConfirmedOwner(msg.sender) {\n  string public greeting;\n\n  function setGreeting(string calldata _greeting) external {\n    greeting = _greeting;\n  }\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": true,
+      "runs": 1000000
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "evm.methodIdentifiers",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "evm.gasEstimates"
+        ],
+        "": ["ast"]
+      }
+    },
+    "metadata": {
+      "useLiteralContent": true
+    }
+  }
+}
