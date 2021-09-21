@@ -74,7 +74,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const InboxArtifact = await hre.artifacts.readArtifact("IInbox");
   const inbox = new ethers.Contract("0x578BAde599406A8fE3d24Fd7f7211c0911F5B29e", InboxArtifact.abi, l1Signer);
   const l1GasPriceEstimate = 2000000000; // Gas price on rinkeby L1, static 2 gwei for now
-  // TODO: calculate maxGas with estimateGas of forwarderCalldata from alias on L2
+  // TODO: calculate maxGas with NodeInterface.estimateRetryableTicket https://developer.offchainlabs.com/docs/sol_contract_docs/md_docs/arb-bridge-peripherals/rpc-utils/nodeinterface#estimateretryableticketaddress-sender-uint256-deposit-address-destaddr-uint256-l2callvalue-uint256-maxsubmissioncost-address-excessfeerefundaddress-address-callvaluerefundaddress-uint256-maxgas-uint256-gaspricebid-bytes-data-%E2%86%92-uint256-uint256-external
   const maxGas = 1000000; // Static 1M for now
   const callValue = submissionPriceWei.add(gasPriceBid.mul(maxGas));
   const payload = [
