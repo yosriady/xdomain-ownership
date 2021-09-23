@@ -57,8 +57,8 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
    * This is highly unlikely, but just to be safe, let's increase the amount we'll be paying (the difference between the actual cost and the amount we pay gets refunded to our address on L2 anyway)
    * (Note that in future releases, the a max cost increase per 24 hour window of 150% will be enforced, so this will be less of a concern.)
    */
-  const submissionPriceWei = _submissionPriceWei.mul(5); // add buffer
-  console.log(`submissionPriceWei with buffer: ${submissionPriceWei}`);
+  const maxSubmissionCost = _submissionPriceWei.mul(5); // add buffer
+  console.log(`maxSubmissionCost (submissionPriceWei with buffer) ${maxSubmissionCost}`);
   /**
    * Now we'll figure out the gas we need to send for L2 execution; this requires the L2 gas price and gas limit for our L2 transaction
    */
@@ -73,23 +73,66 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   // L1 Inbox
   const InboxArtifact = await hre.artifacts.readArtifact("IInbox");
   const inbox = new ethers.Contract("0x578BAde599406A8fE3d24Fd7f7211c0911F5B29e", InboxArtifact.abi, l1Signer);
-  const l1GasPriceEstimate = 2000000000; // Gas price on rinkeby L1, static 2 gwei for now
-  // TODO: calculate maxGas with NodeInterface.estimateRetryableTicket https://developer.offchainlabs.com/docs/sol_contract_docs/md_docs/arb-bridge-peripherals/rpc-utils/nodeinterface#estimateretryableticketaddress-sender-uint256-deposit-address-destaddr-uint256-l2callvalue-uint256-maxsubmissioncost-address-excessfeerefundaddress-address-callvaluerefundaddress-uint256-maxgas-uint256-gaspricebid-bytes-data-%E2%86%92-uint256-uint256-external
-  const maxGas = 1000000; // Static 1M for now
-  const callValue = submissionPriceWei.add(gasPriceBid.mul(maxGas));
+
+  // NodeInterface precompile
+  const NodeInterfaceArtifact = await hre.artifacts.readArtifact("NodeInterface");
+  const nodeInterface = new ethers.Contract(
+    "0x00000000000000000000000000000000000000C8",
+    NodeInterfaceArtifact.abi,
+    l2Signer,
+  );
+
+  // TODO: refactor below to a helper function
+  let maxGas = 100000; // Starts as a static value, and adjusted with result from estimateRetryableTicket
+  let depositValue;
+  while (true) {
+    console.log("------");
+    // TODO: needs to do a binary search similar to the safe gas estimation (requiredTxGas)
+    // TODO: calculate maxGas with NodeInterface.estimateRetryableTicket https://developer.offchainlabs.com/docs/sol_contract_docs/md_docs/arb-bridge-peripherals/rpc-utils/nodeinterface#estimateretryableticketaddress-sender-uint256-deposit-address-destaddr-uint256-l2callvalue-uint256-maxsubmissioncost-address-excessfeerefundaddress-address-callvaluerefundaddress-uint256-maxgas-uint256-gaspricebid-bytes-data-%E2%86%92-uint256-uint256-external
+    // Initial value seeded from L2 estimateGas?
+    depositValue = maxSubmissionCost.add(gasPriceBid.mul(maxGas));
+    console.log(`estimateRetryableTicket`);
+    try {
+      const estimate = await nodeInterface.estimateRetryableTicket(
+        l1Signer.address, // address sender,
+        depositValue, // uint256 deposit,
+        forwarder.address, //address destAddr,
+        0, // uint256 l2CallValue,
+        maxSubmissionCost, // uint256 maxSubmissionCost,
+        deployer, // address excessFeeRefundAddress,
+        deployer, // address callValueRefundAddress,
+        maxGas,
+        gasPriceBid,
+        calldata,
+      );
+      console.log(estimate); // TODO: get gasUsed
+      console.log(`gasUsed: ${estimate.gasUsed}`);
+      console.log(`gasPrice: ${estimate.gasPrice}`);
+
+      // Successful estimate, so continue
+      maxGas = estimate.gasUsed;
+      break;
+    } catch (err) {
+      console.log(`estimateRetryableTicket err`);
+      console.log(err);
+      // increase maxGas by N
+      maxGas += 100000;
+    }
+  }
+
   const payload = [
     forwarder.address, // destination L2 contract address
     0, // L2 call value (requested)
-    submissionPriceWei, // Max gas deducted from user's L2 balance to cover base submission fee
+    maxSubmissionCost, // Max gas deducted from user's L2 balance to cover base submission fee
     deployer, // excessFeeRefundAddress: maxgas x gasprice - execution cost gets credited here on L2 balance
     deployer, // callValueRefundAddress: l2Callvalue gets credited here on L2 if retryable txn times out or gets cancelled
-    maxGas, // Max gas deducted from user's L2 balance to cover L2 execution
+    maxGas, // Max gas deducted from user's L2 balance to cover L2 execution, Gas limit for immediate L2 execution attempt (can be estimated via _NodeInterface.estimateRetryableTicket*)
     gasPriceBid, // price bid for L2 execution
     calldata, // ABI encoded data of L2 message
   ];
   console.log(payload);
-  console.log(`value: ${callValue}`);
-  const tx = await inbox.createRetryableTicketNoRefundAliasRewrite(...payload, { value: callValue });
+  console.log(`depositValue: ${depositValue}`);
+  const tx = await inbox.createRetryableTicketNoRefundAliasRewrite(...payload, { value: depositValue });
   const receipt = await tx.wait();
   console.log(`Txn confirmed on L1! 🙌 ${receipt.transactionHash}`);
 
@@ -116,8 +159,6 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   console.log(`L2 retryable txn executed 🥳 ${retryRec.transactionHash}`);
 
-  const contractOwnerAfter = await myContract.owner();
-  console.log(`contractOwner after: ${contractOwnerAfter}`);
   console.log("✌️");
 };
 export default func;
