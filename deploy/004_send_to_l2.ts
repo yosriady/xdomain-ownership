@@ -21,7 +21,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const MyContractArtifact = await deployments.get("MyContract");
   const myContract = new ethers.Contract(MyContractArtifact.address, MyContractArtifact.abi, l2Signer);
   const MyContractInterface = new ethers.utils.Interface(MyContractArtifact.abi);
-  const myContractCalldata = MyContractInterface.encodeFunctionData("setGreeting", ["world"]);
+  const myContractCalldata = MyContractInterface.encodeFunctionData("setGreeting", ["huzzah"]);
 
   // L2 Forwarder
   const ForwarderArtifact = await deployments.get("ArbitrumCrossDomainForwarder");
@@ -87,9 +87,8 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   let depositValue;
   while (true) {
     console.log("------");
-    // TODO: needs to do a binary search similar to the safe gas estimation (requiredTxGas)
-    // TODO: calculate maxGas with NodeInterface.estimateRetryableTicket https://developer.offchainlabs.com/docs/sol_contract_docs/md_docs/arb-bridge-peripherals/rpc-utils/nodeinterface#estimateretryableticketaddress-sender-uint256-deposit-address-destaddr-uint256-l2callvalue-uint256-maxsubmissioncost-address-excessfeerefundaddress-address-callvaluerefundaddress-uint256-maxgas-uint256-gaspricebid-bytes-data-%E2%86%92-uint256-uint256-external
-    // Initial value seeded from L2 estimateGas?
+    // Currently: A linear search similar to the safe gas estimation (requiredTxGas)
+    // Calculates maxGas with NodeInterface.estimateRetryableTicket https://developer.offchainlabs.com/docs/sol_contract_docs/md_docs/arb-bridge-peripherals/rpc-utils/nodeinterface#estimateretryableticketaddress-sender-uint256-deposit-address-destaddr-uint256-l2callvalue-uint256-maxsubmissioncost-address-excessfeerefundaddress-address-callvaluerefundaddress-uint256-maxgas-uint256-gaspricebid-bytes-data-%E2%86%92-uint256-uint256-external
     depositValue = maxSubmissionCost.add(gasPriceBid.mul(maxGas));
     console.log(`estimateRetryableTicket`);
     try {
@@ -115,8 +114,9 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     } catch (err) {
       console.log(`estimateRetryableTicket err`);
       console.log(err);
+
       // increase maxGas by N
-      maxGas += 100000;
+      maxGas += 100000; // TODO: binary search
     }
   }
 
@@ -140,6 +140,9 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
    * The L1 side is confirmed; now we listen and wait for the for the Sequencer to include the L2 side; we can do this by computing the expected txn hash of the L2 transaction.
    * To compute this txn hash, we need our message's "sequence number", a unique identifier. We'll fetch from the event logs with a helper method
    */
+  // TODO: for Safe flow, we need to parse the `InboxMessageDelivered` event from the Safe execution transaction
+  // TODO: we might need a command that takes in a Safe proposal hash and fetches the above
+  // https://github.com/OffchainLabs/arbitrum/blob/5ca724dd92a06976bd18a8c1228bf892bdfca2ef/packages/arb-ts/src/lib/bridge_helpers.ts#L395-L422
   const inboxSeqNums = await bridge.getInboxSeqNumFromContractTransaction(receipt);
   console.log(`inboxSeqNums: ${inboxSeqNums}`);
   /**
@@ -153,7 +156,9 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   /**
    * Now we wait for the Sequencer to include it in its off chain inbox.
    */
-  console.log(`waiting for L2 tx 🕐... (should take < 10 minutes, current time: ${new Date().toTimeString()}`);
+  console.log(
+    `waiting for L2 tx ${retryableTxnHash} 🕐... (should take < 10 minutes, current time: ${new Date().toTimeString()}`,
+  );
 
   const retryRec = await l2Provider.waitForTransaction(retryableTxnHash);
 
