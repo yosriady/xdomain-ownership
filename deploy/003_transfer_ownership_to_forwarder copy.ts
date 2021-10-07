@@ -17,6 +17,9 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   const contractOwner = await myContract.owner();
   console.log(`contractOwner before: ${contractOwner}`);
+
+  const transferTx = await myContract.transferOwnership(forwarder.address);
+  await transferTx.wait();
 };
 export default func;
 func.tags = ["TransferOwnership"];
