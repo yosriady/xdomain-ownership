@@ -21,8 +21,8 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const MyContractArtifact = await deployments.get("MyContract");
   const myContract = new ethers.Contract(MyContractArtifact.address, MyContractArtifact.abi, l2Signer);
   const MyContractInterface = new ethers.utils.Interface(MyContractArtifact.abi);
-  // const myContractCalldata = MyContractInterface.encodeFunctionData("setGreeting", ["huzzah"]);
-  const myContractCalldata = MyContractInterface.encodeFunctionData("acceptOwnership", []);
+  const myContractCalldata = MyContractInterface.encodeFunctionData("setGreeting", ["thu 7 oct"]);
+  // const myContractCalldata = MyContractInterface.encodeFunctionData("acceptOwnership", []);
 
   // L2 Forwarder
   const ForwarderArtifact = await deployments.get("ArbitrumCrossDomainForwarder");

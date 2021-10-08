@@ -11,6 +11,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   const MyContract = await deployments.get("MyContract");
   const myContract = new hre.ethers.Contract(MyContract.address, MyContract.abi, wallet);
+  console.log(`myContract address: ${myContract.address}`);
 
   const Forwarder = await deployments.get("ArbitrumCrossDomainForwarder");
   const forwarder = new hre.ethers.Contract(Forwarder.address, Forwarder.abi, wallet);
