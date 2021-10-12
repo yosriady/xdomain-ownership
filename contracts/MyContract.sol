@@ -7,7 +7,7 @@ import "./ConfirmedOwner.sol";
 contract MyContract is ConfirmedOwner(msg.sender) {
   string public greeting;
 
-  function setGreeting(string calldata _greeting) external {
+  function setGreeting(string calldata _greeting) external onlyOwner {
     greeting = _greeting;
   }
 }

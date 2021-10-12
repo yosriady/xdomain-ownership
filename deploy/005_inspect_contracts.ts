@@ -10,7 +10,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const wallet = hre.ethers.Wallet.fromMnemonic(process.env.MNEMONIC!).connect(provider);
 
   const MyContract = await deployments.get("MyContract");
-  const myContract = new hre.ethers.Contract(MyContract.address, MyContract.abi, wallet);
+  const myContract = new hre.ethers.Contract("0xEfc59581D49f5FA857ae4609d0d98c0BDb2f91e2", MyContract.abi, wallet);
   console.log(`myContract address: ${myContract.address}`);
 
   const Forwarder = await deployments.get("ArbitrumCrossDomainForwarder");

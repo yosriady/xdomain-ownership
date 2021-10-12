@@ -62,13 +62,13 @@ contract ArbitrumCrossDomainForwarder is TypeAndVersionInterface, CrossDomainFor
     require(success, string(abi.encode("xDomain delegatecall failed:", res)));
   }
 
-  function executeDelegateCall(
-    address to,
-    bytes memory data,
-    uint256 txGas
-  ) external returns (bool success) {
-    assembly {
-      success := delegatecall(txGas, to, add(data, 0x20), mload(data), 0, 0)
-    }
-  }
+  // function executeDelegateCall(
+  //   address to,
+  //   bytes memory data,
+  //   uint256 txGas
+  // ) external returns (bool success) {
+  //   assembly {
+  //     success := delegatecall(txGas, to, add(data, 0x20), mload(data), 0, 0)
+  //   }
+  // }
 }
